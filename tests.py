@@ -1,21 +1,14 @@
-from functions.get_file_content import get_file_content
+from functions.run_python import run_python_file
 
-#result = get_file_content("calculator", "lorem.txt")
+test1 = run_python_file("calculator", "main.py")
+test2 = run_python_file("calculator", "main.py", ["3 + 5"])
+test3 = run_python_file("calculator", "tests.py")
+test4 = run_python_file("calculator", "../main.py")
+test5 = run_python_file("calculator", "nonexistent.py")
 
-#print(result)
+print(test1)
+print(test2)
+print(test3)
+print(test4)
+print(test5)
 
-test1_result = get_file_content("calculator", "main.py")
-
-test2_result = get_file_content("calculator", "pkg/calculator.py")
-
-test3_result = get_file_content("calculator", "/bin/cat")
-
-test4_result = get_file_content("calculator", "pkg/does_not_exit.py")
-
-print(test1_result)
-
-print(test2_result)
-
-print(test3_result)
-
-print(test4_result)
