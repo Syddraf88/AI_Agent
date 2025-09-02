@@ -3,7 +3,7 @@ import subprocess
 from google.genai import types
 
 
-def run_python_file(working_directory, file_path, args=[]):
+def run_python_file(working_directory, file_path, args=None):
     working_abs = os.path.realpath(working_directory)
     target_abs = os.path.realpath(os.path.join(working_abs, file_path))
     common = os.path.commonpath([working_abs, target_abs])
@@ -46,4 +46,26 @@ def run_python_file(working_directory, file_path, args=[]):
     except Exception as e:
         return f"Error: executing Python file: {e}"
     
-    
+schema_run_python_file = types.FunctionDeclaration(
+    name="run_python_file",
+    description="Executes the specified python file using subprocess.run and returns the results in a string.",
+    parameters=types.Schema(
+        required=["file_path"],
+        type=types.Type.OBJECT,
+        properties={
+            "file_path": types.Schema(
+                type=types.Type.STRING,
+                description="The python file to run",
+            ),
+            "args": types.Schema(
+                type=types.Type.ARRAY,
+                items=types.Schema(
+                    type=types.Type.STRING,
+                    description="Optional arugments to pass to the python file.",
+                ),
+                description="Optional arguments to pass to the python file",
+            )
+
+        },
+    ),
+)
