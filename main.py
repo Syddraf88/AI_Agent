@@ -4,6 +4,7 @@ from google import genai
 from google.genai import types
 from dotenv import load_dotenv
 
+from call_function import call_function
 from functions.get_files_info import schema_get_files_info
 from functions.get_file_content import schema_get_file_content
 from functions.write_file import schema_write_file
@@ -46,6 +47,7 @@ def main():
     generate_content(client, messages, verbose, user_prompt)
 
 def generate_content(client, messages, verbose, user_prompt):
+    try_count = 10
     reply = "I'M JUST A ROBOT"
     system_prompt = """
 You are a helpful AI coding agent.
@@ -59,26 +61,51 @@ When a user asks a question or makes a request, make a function call plan. You c
 
 All paths you provide should be relative to the working directory. You do not need to specify the working directory in your function calls as it is automatically injected for security reasons.
 """
-    response = client.models.generate_content(
-        model="gemini-2.0-flash-001",
-        contents=messages,
-        config=types.GenerateContentConfig(tools=[available_functions],
-                                           system_instruction=system_prompt)
-    )
+    try:
+        while try_count > 0:
+            response = client.models.generate_content(
+                model="gemini-2.0-flash-001",
+                contents=messages,
+                config=types.GenerateContentConfig(tools=[available_functions],
+                                            system_instruction=system_prompt)
+                )
+            
+        if response.candidates:
+             for candidate in response.candidates:
+                  messages.append(candidate.content)
 
-    if verbose == True:
-            print(f"User prompt: {user_prompt}")
-            print("Prompt tokens:", response.usage_metadata.prompt_token_count)
-            print("Response tokens:", response.usage_metadata.candidates_token_count)
+        if verbose == True:
+                print(f"User prompt: {user_prompt}")
+                print("Prompt tokens:", response.usage_metadata.prompt_token_count)
+                print("Response tokens:", response.usage_metadata.candidates_token_count)
 
-    if not response.function_calls:
-        print("Response:")
-        print(response.text)
+        if not response.function_calls:
+            print("Response:")
+            print(response.text)
 
-    else:
-        for call in response.function_calls:
-            print(f"Calling function: {call.name}({call.args})")
+        else:
+            
+            for call in response.function_calls:
+                if verbose:
+                    print("Model chose:", call.name, call.args)
+                call_response = call_function(call, verbose=verbose)
+                messages.append(call_response)
+                if (
+                    not call_response.parts 
+                    or not call_response.parts[0].function_response
+                    or call_response.parts[0].function_response.response is None
+                ):
+                        raise RuntimeError(f"function response missing: {call_response}")
+                
+                
+            if verbose:
+                print(f"-> {call_response.parts[0].function_response.response}")
         
+        try_count -= 1
+
+    except Exception as e:
+         print(f"Exception: {e}")
+    
 
 
 if __name__ == "__main__":
