@@ -1,5 +1,8 @@
 import sys
 import os
+import time
+import random
+
 from google import genai
 from google.genai import types
 from dotenv import load_dotenv
@@ -47,7 +50,7 @@ def main():
     generate_content(client, messages, verbose, user_prompt)
 
 def generate_content(client, messages, verbose, user_prompt):
-    try_count = 10
+    max_retires = 10
     reply = "I'M JUST A ROBOT"
     system_prompt = """
 You are a helpful AI coding agent.
@@ -61,8 +64,9 @@ When a user asks a question or makes a request, make a function call plan. You c
 
 All paths you provide should be relative to the working directory. You do not need to specify the working directory in your function calls as it is automatically injected for security reasons.
 """
-    try:
-        while try_count > 0:
+    
+    for attempt in range(max_retires + 1):
+        try:
             response = client.models.generate_content(
                 model="gemini-2.0-flash-001",
                 contents=messages,
@@ -70,41 +74,94 @@ All paths you provide should be relative to the working directory. You do not ne
                                             system_instruction=system_prompt)
                 )
             
-        if response.candidates:
-             for candidate in response.candidates:
-                  messages.append(candidate.content)
+            #made_tool_call = False
 
-        if verbose == True:
-                print(f"User prompt: {user_prompt}")
-                print("Prompt tokens:", response.usage_metadata.prompt_token_count)
-                print("Response tokens:", response.usage_metadata.candidates_token_count)
+            #for candidate in (response.candidates or []):
+            #    messages.append(candidate.content)
 
-        if not response.function_calls:
-            print("Response:")
-            print(response.text)
+             #   for part in (candidate.content.parts or []):
+              #      if part.function_call:
+               #         made_tool_call = True
+                #        call = part.function_call
+                 #       if verbose:
+                  #          print(f"- Calling function {call.name}")
+                   #     tool_msg = call_function(call, verbose=verbose)
+                    #    messages.append(tool_msg)
+            # python
+            made_tool_call = False
 
-        else:
-            
-            for call in response.function_calls:
+            for cand in (response.candidates or []):
+                messages.append(cand.content)  # the model's turn
+
+                fr_parts = []
+                for part in (cand.content.parts or []):
+                    if part.function_call:
+                        made_tool_call = True
+                        call = part.function_call
+                        if verbose:
+                            print(f"- Calling function: {call.name} {call.args}")
+                        raw_result = call_function(call, verbose=verbose)
+
+                        payload = raw_result if isinstance(raw_result, dict) else {"result": raw_result}
+
+                        #fr_parts.append(
+                            #types.Part.from_function_response(
+                                #name=call.name,
+                                #response=payload,
+                           ##)
+                
+                if fr_parts:
+                    messages.append(types.Content(role="user", parts=fr_parts))
+
+            if verbose == True:
+                    print(f"User prompt: {user_prompt}")
+                    print("Prompt tokens:", response.usage_metadata.prompt_token_count)
+                    print("Response tokens:", response.usage_metadata.candidates_token_count)
+
+            if not made_tool_call and response.text:
+                print("Response:")
+                print(response.text)
+                return response.text
+
+            #else:
+                
+                #for call in response.function_calls:
+                    #if verbose:
+                        #print("Model chose:", call.name, call.args)
+                    #call_response = call_function(call, verbose=verbose)
+                    #messages.append(call_response)
+                    #if (
+                        #not call_response.parts 
+                        #or not call_response.parts[0].function_response
+                        #or call_response.parts[0].function_response.response is None
+                    #):
+                            #raise RuntimeError(f"function response missing: {call_response}")
+                    #continue
+                    
+                    
                 if verbose:
-                    print("Model chose:", call.name, call.args)
-                call_response = call_function(call, verbose=verbose)
-                messages.append(call_response)
-                if (
-                    not call_response.parts 
-                    or not call_response.parts[0].function_response
-                    or call_response.parts[0].function_response.response is None
-                ):
-                        raise RuntimeError(f"function response missing: {call_response}")
+                    print(f"-> {call_response.parts[0].function_response.response}")
+            
                 
-                
-            if verbose:
-                print(f"-> {call_response.parts[0].function_response.response}")
-        
-        try_count -= 1
 
-    except Exception as e:
-         print(f"Exception: {e}")
+        except Exception as e:
+            msg = str(e)
+            retryable = (
+            "429" in msg
+            or "RESOURCE_EXHAUSTED" in msg
+            or "UNAVAILABLE" in msg
+            or "INTERNAL" in msg
+            or "DEADLINE_EXCEEDED" in msg
+            or "503" in msg
+        )
+            if attempt == max_retires or not retryable:
+                raise   
+            delay = 0.5 * (2 ** attempt) + random.uniform(0, 0.2)
+            if verbose:
+                print(f"Retrying after error ({msg}). Sleeping: {delay:.2f}s...")
+            time.sleep(delay)
+            continue
+
     
 
 

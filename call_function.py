@@ -33,16 +33,8 @@ def call_function(function_call_part, verbose=False):
             print("DEBUG cwd about to pass:", working_directory)
 
         function_result = function_map[function_name](**args)
-        return types.Content(
-            role="tool",
-            parts=[
-                types.Part.from_function_response(
-                    name=function_name,
-                    response={"result": function_result},
-                )
-            ]
-        )
-
+        return function_result if isinstance(function_result, dict) else {"result": function_result}
+    
     else:
         return types.Content(
             role="tool",
